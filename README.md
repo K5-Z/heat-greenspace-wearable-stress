@@ -5,28 +5,30 @@ R code for the analyses in *Urban green-space attributes modify associations bet
 ## Modules
 
 | Script | Analysis | Main output |
-|---|---|---|
+| --- | --- | --- |
 | `01_DLNMs/DLNM.R` | City-specific quasi-binomial distributed lag non-linear models (DLNMs) | `first_stage.rds`, reduced coefficients and covariance matrices |
 | `02_Meta_Regression/Meta_Regression.R` | Multivariate meta-regression and green-space effect modification | `meta_analysis.rds`, odds ratios, RORs and tests |
-| `03_Subgroup_Analyses/Subgroup_Analyses.R` | Sex, age and bioclimatic-region analyses | Subgroup and regional estimates |
+| `03_Subgroup_Analyses/Subgroup_Analyses.R` | Sex, age and bioclimatic-region analyses | `subgroup_analysis.rds`, subgroup and regional estimates |
 | `04_Future_Projections/Future_Projections.R` | Historical and projected heat-related burden under green-space adaptation scenarios | `projections.rds`, burden estimates and city classifications |
 
 Shared settings and functions are defined in `DLNM.R` and loaded by subsequent scripts. Each example includes the fitted objects needed from earlier stages, so the modules can be run separately.
 
 ## Requirements
 
-R 4.4 or later, with `dlnm`, `mixmeta` and `MASS`. The code was prepared with R 4.6.0, dlnm 2.4.10, mixmeta 1.2.2 and MASS 7.3-65.
+R 4.4 or later, with `dlnm`, `mixmeta` and `MASS`. The examples were tested on Windows 11 (64-bit) with R 4.6.0, dlnm 2.4.10, mixmeta 1.2.2 and MASS 7.3-65. No specialized hardware is required.
 
 ```r
 install.packages(c("dlnm", "mixmeta", "MASS"), repos = "https://cloud.r-project.org")
 ```
+
+In a separate installation check on Windows, installing the packages took less than a minute using binary packages. This excludes R installation; installation time varies with network conditions and download caching.
 
 ## Input data
 
 Each module reads an RDS file containing a named list. The list includes `module` (integer 1–4), `synthetic` (logical), `provenance` and the objects below. Dates use R's `Date` class, identifiers and categories are character values, and measurements and counts are numeric. Missing values are recorded as `NA`.
 
 | Module | Required objects |
-|---|---|
+| --- | --- |
 | 1 | `city_day_outcomes`, `historical_city_temperature` |
 | 2 | `first_stage`, `city_attributes` |
 | 3 | `first_stage`, `city_attributes`, `city_contextual_covariates`, `subgroup_city_day_outcomes`, `historical_city_temperature` |
@@ -34,20 +36,20 @@ Each module reads an RDS file containing a named list. The list includes `module
 
 ### Data fields
 
-- `city_day_outcomes`: `city_id,date,high_stress_count,non_high_stress_count,temperature,relative_humidity,wind_speed,precipitation,aqi,holiday`. One record per city and date. Units are °C, %, m/s and mm/day for temperature, relative humidity, wind speed and precipitation, respectively; `holiday` is 0 or 1.
-- `subgroup_city_day_outcomes`: the same fields, with `stratum_type,stratum`. Sex groups are `Female` and `Male`; age groups are `18-34`, `35-49`, `50-64` and `65plus`.
-- `city_attributes`: `city_id,region,cooling,gvi,accessibility,population_2020`. Cooling is signed air-temperature reduction capacity (°C); GVI is a fraction from 0 to 1; accessibility is the 15-minute accessibility index; population is the 2020 census resident count.
-- `historical_city_temperature`: `city_id,date,temperature`. Complete April–September daily temperature records for the analytical and historical reference years.
-- `future_city_temperature`: `city_id,date,temperature,ssp,climate_model`. Daily April–September temperatures for 2030–2100 under `ssp126`, `ssp245` and `ssp585`. Each `climate_model` identifies one GCM with one daily temperature series, and the same GCM set is used across the corresponding scenarios.
-- `city_month_vegetation`: `city_id,month,ndvi`; monthly NDVI (−1 to 1) for April–September.
-- `city_month_cooling_efficiency`: `city_id,month,cooling_efficiency`; signed cooling efficiency in °C per unit NDVI, with positive values indicating cooling.
-- `city_month_baseline_probabilities`: `city_id,month,p0,reference_days,reference_user_days,high_stress_count,first_reference_date,last_reference_date`; city-month baseline probabilities and the counts used to calculate them.
+- `city_day_outcomes`: `city_id, date, high_stress_count, non_high_stress_count, temperature, relative_humidity, wind_speed, precipitation, aqi, holiday`. One record per city and date. Units are °C, %, m/s and mm/day for temperature, relative humidity, wind speed and precipitation, respectively; `holiday` is 0 or 1.
+- `subgroup_city_day_outcomes`: the same fields, with `stratum_type, stratum`. Sex groups are `Female` and `Male`; age groups are `18-34`, `35-49`, `50-64` and `65plus`.
+- `city_attributes`: `city_id, region, cooling, gvi, accessibility, population_2020`. Cooling is signed air-temperature reduction capacity (°C); GVI is a fraction from 0 to 1; accessibility is the 15-minute accessibility index; population is the 2020 census resident count.
+- `historical_city_temperature`: `city_id, date, temperature`. Complete April–September daily temperature records for the analytical and historical reference years.
+- `future_city_temperature`: `city_id, date, temperature, ssp, climate_model`. Daily April–September temperatures for 2030–2100 under `ssp126`, `ssp245` and `ssp585`. Each `climate_model` identifies one GCM with one daily temperature series, and the same GCM set is used across the corresponding scenarios.
+- `city_month_vegetation`: `city_id, month, ndvi`; monthly NDVI (−1 to 1) for April–September.
+- `city_month_cooling_efficiency`: `city_id, month, cooling_efficiency`; signed cooling efficiency in °C per unit NDVI, with positive values indicating cooling.
+- `city_month_baseline_probabilities`: `city_id, month, p0, reference_days, reference_user_days, high_stress_count, first_reference_date, last_reference_date`; city-month baseline probabilities and the counts used to calculate them.
 
 `city_contextual_covariates` includes `city_id` and seven variables: `pct_age_0_14`, `pct_age_65_plus`, `pct_urban_builtup`, `education_years`, `pct_one_person_households`, `pct_nonlocal_registered` and `pct_agricultural_employment`. The extended adjustment adds `gdp_100m_cny` (CNY 100 million), `nighttime_light` (nW cm−2 sr−1) and `ac_per_100_households` (units per 100 households). Proportion variables are expressed as percentages.
 
 Bioclimatic regions use the codes `humid_subtropical_tropical_forest`, `humid_temperate_forest`, `semi_arid_temperate_grassland`, `arid_temperate_desert` and `qinghai_tibetan_alpine`.
 
-`first_stage` contains city-level `coefficients` (`city_id,b1,b2,b3`), corresponding full 3×3 `covariance` matrices, `climate` (`mean_temperature,temperature_range`), `basis`, `ledger` and `temperature_support`. `gvi_model` is the `continuous$gvi` result from Module 2. `temperature_support` records each city's fitted temperature range and observation dates (`city_id,historical_min,historical_max,model_days,first_model_date,last_model_date`).
+`first_stage` contains city-level `coefficients` (`city_id, b1, b2, b3`), corresponding full 3×3 `covariance` matrices, `climate` (`mean_temperature, temperature_range`), `basis`, `ledger` and `temperature_support`. `gvi_model` is the `continuous$gvi` result from Module 2. `temperature_support` records each city's fitted temperature range and observation dates (`city_id, historical_min, historical_max, model_days, first_model_date, last_model_date`).
 
 Before aggregation, high-stress days are defined as days with stress strictly above each user's P90, calculated from valid observations in the study period. This requires at least five measurements per day and ten valid days per user. The same thresholds are used for subgroup data.
 
@@ -62,13 +64,15 @@ Rscript 03_Subgroup_Analyses/Subgroup_Analyses.R --input 03_Subgroup_Analyses/ex
 Rscript 04_Future_Projections/Future_Projections.R --input 04_Future_Projections/example_data.rds --output ../results_future
 ```
 
+On the tested system, the examples took approximately 1–2 minutes (DLNM), under 1 minute (meta-regression), 9–10 minutes (subgroup analyses) and 10–12 minutes (future projections). These times exclude installation. Successful runs create RDS results and CSV tables in the specified output directories.
+
 The examples cover 74 fictional cities. An input file can be inspected with:
 
 ```r
 str(readRDS("01_DLNMs/example_data.rds"))
 ```
 
-For study-data runs, set `synthetic = FALSE` and create input bundles with the same fields and fitted objects from the corresponding preceding analyses. For example, the `first_stage` object for Module 2 can be loaded from `../results_dlnm/first_stage.rds`. Save the input bundle as an RDS file and supply its path with `--input`.
+For study-data runs, set `synthetic = FALSE` and create input bundles with the same fields and fitted objects from the corresponding preceding analyses. For example, the `first_stage` object for Module 2 can be loaded from `../results_dlnm/first_stage.rds`. Save the input bundle as an RDS file and supply its path with `--input`. Use the corresponding Module 2 `continuous$gvi` model as `gvi_model` for Module 4. Preceding model objects and city inputs should come from the same study run.
 
 ## Analytical methods
 
@@ -87,3 +91,7 @@ For each SSP and adaptation scenario, burdens are calculated separately from eac
 ## Data availability
 
 Huawei individual-level data are subject to privacy and data-use restrictions and are not included in this repository. Reproducing the study estimates requires access to the corresponding authorized data and other study inputs.
+
+## License
+
+The code is available under the MIT License.
